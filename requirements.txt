@@ -1,2 +1,2 @@
-pandas-ta
 yfinance
+pandas-ta
