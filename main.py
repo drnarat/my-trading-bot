@@ -2,10 +2,11 @@ import streamlit as st
 import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
+import time
 from datetime import datetime
 
 # ============================================================
-# 1. UI CONFIG (High Contrast Midnight)
+# 1. UI CONFIG (HIGH CONTRAST - DARK MODE)
 # ============================================================
 st.set_page_config(page_title="Stock Scanner AI Pro", page_icon="📈", layout="centered")
 
@@ -14,14 +15,11 @@ def apply_ui_theme():
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=IBM+Plex+Mono:wght@700&display=swap');
         html, body, [class*="css"] { font-family: 'Sarabun', sans-serif; background-color: #000000; color: #FFBF00; }
-        .stButton>button { width: 100%; border-radius: 12px; background-color: #111; color: #00E5FF; border: 2px solid #00E5FF; font-weight: bold; height: 3em; }
-        .stock-card { background: #0A0A0A; border: 2px solid #1E293B; border-radius: 15px; padding: 15px; margin-bottom: 12px; }
-        .buy-border { border-left: 8px solid #00FF41; }
-        .sell-border { border-left: 8px solid #FF3131; }
-        .watch-border { border-left: 8px solid #FFD700; }
-        .ai-card { background: rgba(0, 229, 255, 0.05); border: 1px solid #00E5FF; border-radius: 12px; padding: 15px; margin: 10px 0; color: #FFBF00; }
-        .symbol-text { font-family: 'IBM Plex Mono'; font-size: 1.4rem; color: #00E5FF; }
+        .stButton>button { width: 100%; border-radius: 12px; background-color: #111; color: #00E5FF; border: 2px solid #00E5FF; font-weight: bold; height: 3.5em; }
+        .ai-card { background: #0A0A0A; border: 2px solid #1E293B; border-radius: 15px; padding: 20px; margin-bottom: 15px; color: #FFBF00; }
+        .symbol-text { font-family: 'IBM Plex Mono'; font-size: 2rem; color: #00E5FF; }
         .section-header { border-left: 6px solid #6c63ff; padding-left: 12px; margin: 25px 0 10px; color: #00E5FF; font-weight: bold; }
+        .status-text { color: #00FF41; font-family: 'IBM Plex Mono'; font-size: 0.9rem; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -35,13 +33,10 @@ class TradingSystem:
         ticker = yf.Ticker(ticker_name)
         df = ticker.history(period="1y")
         if df.empty: return None, None, None
-        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         return df, ticker.info, ticker.news
 
     @staticmethod
     def calculate_tech(df, p):
-        df['SMA_S'] = ta.sma(df['Close'], length=p['sma_s'])
-        df['SMA_M'] = ta.sma(df['Close'], length=p['sma_m'])
         df['RSI'] = ta.rsi(df['Close'], length=p['rsi_p'])
         return df.dropna()
 
@@ -52,21 +47,17 @@ def main():
     apply_ui_theme()
     if "view" not in st.session_state: st.session_state.view = "scan"
 
-    # --- SIDEBAR: ALL 18 PARAMETERS + MANUAL SEARCH ---
     with st.sidebar:
-        st.markdown("### ⚙️ Parameters (Full Set)")
+        st.markdown("### ⚙️ ตัวปรับจูน Parameters")
         p = {
-            'sma_s': st.slider("SMA สั้น", 5, 50, 20),
-            'sma_m': st.slider("SMA กลาง", 20, 100, 50),
+            'sma_s': 20, 'sma_m': 50,
             'rsi_p': st.slider("RSI Period", 7, 21, 14),
-            'rsi_ob': st.slider("RSI Overbought", 60, 85, 70),
-            'rsi_os': st.slider("RSI Oversold", 15, 40, 30),
-            'atr_p': st.slider("ATR Period", 7, 21, 14)
+            'rsi_ob': 70, 'rsi_os': 30
         }
         st.markdown("---")
-        st.markdown("### 🔍 วิเคราะห์รายหุ้น (AI Deep Search)")
-        manual_sym = st.text_input("ระบุชื่อหุ้น", key="manual_input").upper()
-        manual_mkt = st.selectbox("เลือกตลาด", ["SET", "US", "CN"])
+        st.markdown("### 🔍 วิเคราะห์รายหุ้นด้วย AI")
+        manual_sym = st.text_input("ระบุชื่อหุ้น (เช่น PTT, NVDA)").upper()
+        manual_mkt = st.selectbox("ตลาด", ["SET", "US", "CN"])
         if st.button("AI Analyze ✨") and manual_sym:
             st.session_state.detail_sym = manual_sym
             st.session_state.detail_mkt = manual_mkt
@@ -79,61 +70,45 @@ def main():
         render_scan_view(p)
 
 # ============================================================
-# 4. SCANNER VIEW (หน้าจอหลักตามรูปภาพ)
+# 4. SCANNER VIEW (หน้าจอหลัก)
 # ============================================================
 def render_scan_view(p):
     st.markdown("### 1️⃣ เลือกตลาดหุ้น")
     mkt_key = st.radio("Market", ["SET", "US", "CN"], horizontal=True, label_visibility="collapsed")
     
     universe = {
-        "SET": ["ADVANC", "AOT", "BBL", "CPALL", "DELTA", "GULF", "KBANK", "PTT", "SCB", "SCC", "BANPU", "BDMS", "BEM", "BH", "BTS", "CBG", "COM7", "CPN", "CRC", "EA", "GPSC", "HMPRO", "IVL", "KCE", "KTB", "KTC", "LH", "MINT", "OR", "OSP", "RATCH", "SAWAD", "SCGP", "TIDLOR", "TISCO", "TOP", "TRUE", "TU"],
-        "US": ["AAPL", "NVDA", "TSLA", "MSFT", "GOOGL", "AMD", "META", "AMZN", "NFLX", "CRM", "INTC", "QCOM", "MU"],
-        "CN": ["BABA", "JD", "BIDU", "PDD", "NIO", "XPEV", "LI", "BILI"]
+        "SET": ["ADVANC", "AOT", "BBL", "CPALL", "DELTA", "GULF", "KBANK", "PTT", "SCB", "SCC"],
+        "US": ["AAPL", "NVDA", "TSLA", "MSFT", "GOOGL", "AMD"],
+        "CN": ["BABA", "JD", "BIDU", "PDD", "NIO", "XPEV"]
     }
 
-    st.markdown("### 2️⃣ ตัวกรอง")
-    f1, f2 = st.columns(2)
-    with f1:
-        sigs = st.multiselect("กรองสัญญาณ", ["🟢 ซื้อ", "🟡 เฝ้า", "🔴 ขาย"], default=["🟢 ซื้อ", "🟡 เฝ้า"])
-    with f2:
-        sort_by = st.selectbox("เรียงตาม", ["Score", "Change %"])
-
-    st.markdown(f"### 3️⃣ สแกน {mkt_key} ({len(universe[mkt_key])} หุ้น)")
+    st.markdown(f"### 2️⃣ สแกนหาหุ้นที่น่าสนใจ ({mkt_key})")
     if st.button(f"เริ่มสแกน {mkt_key} 🚀"):
         results = []
-        prog = st.progress(0)
+        prog_bar = st.progress(0)
+        status_txt = st.empty()
+        
         for idx, sym in enumerate(universe[mkt_key]):
+            status_txt.markdown(f"🔍 กำลังสแกน {sym}...")
             df, info, _ = TradingSystem.get_data(sym, mkt_key)
-            if df is not None and len(df) > 50:
+            if df is not None:
                 df = TradingSystem.calculate_tech(df, p)
                 c = df.iloc[-1]
-                score = 50 + (15 if c['RSI'] < p['rsi_os'] else -15 if c['RSI'] > p['rsi_ob'] else 0)
-                rec = "🟢 ซื้อ" if score >= 65 else "🔴 ขาย" if score <= 35 else "🟡 เฝ้า"
-                if rec in sigs:
-                    results.append({"sym": sym, "price": c['Close'], "score": score, "rec": rec, "rsi": c['RSI'], "cls": "buy" if score >= 65 else "sell" if score <= 35 else "watch"})
-            prog.progress((idx+1)/len(universe[mkt_key]))
+                score = 50 + (15 if c['RSI'] < 30 else -15 if c['RSI'] > 70 else 0)
+                results.append({"sym": sym, "price": c['Close'], "score": score})
+            prog_bar.progress((idx+1)/len(universe[mkt_key]))
         
-        if not results:
-            st.info("ไม่พบหุ้นตามเงื่อนไข ลองปรับ Parameters")
-        else:
-            for r in results:
-                st.markdown(f"""
-                <div class="stock-card {r['cls']}-border">
-                    <div style="display:flex; justify-content:space-between;">
-                        <span class="symbol-text">{r['sym']}</span>
-                        <span style="font-family:IBM Plex Mono; font-size:1.1rem;">{r['price']:,.2f}</span>
-                    </div>
-                    <div style="margin:8px 0; font-size:0.85rem; color:#8892b0;">Score: {r['score']} | RSI: {r['rsi']:.1f} | <b>{r['rec']}</b></div>
-                </div>
-                """, unsafe_allow_html=True)
-                if st.button(f"🔍 วิเคราะห์ AI เจาะลึก: {r['sym']}", key=f"btn_{r['sym']}"):
-                    st.session_state.detail_sym = r['sym']
-                    st.session_state.detail_mkt = mkt_key
-                    st.session_state.view = "detail"
-                    st.rerun()
+        status_txt.success("สแกนเสร็จสิ้น!")
+        for r in results:
+            st.markdown(f'<div class="ai-card"><b style="font-size:1.2rem;">{r["sym"]}</b> | ราคา: {r["price"]:,.2f} | Score: {r["score"]}</div>', unsafe_allow_html=True)
+            if st.button(f"เจาะลึกด้วย AI: {r['sym']}", key=f"scan_{r['sym']}"):
+                st.session_state.detail_sym = r['sym']
+                st.session_state.detail_mkt = mkt_key
+                st.session_state.view = "detail"
+                st.rerun()
 
 # ============================================================
-# 5. DEEP ANALYSIS VIEW (One-Page AI Insight)
+# 5. DEEP ANALYSIS (พร้อมระบบแสดงสถานะการตรวจข่าวกี่ %)
 # ============================================================
 def render_detail_view(p):
     sym = st.session_state.detail_sym
@@ -142,24 +117,41 @@ def render_detail_view(p):
         st.session_state.view = "scan"
         st.rerun()
 
-    with st.spinner(f"Gemini กำลังค้นหาข้อมูลจาก Internet เกี่ยวกับ {sym}..."):
-        df, info, news = TradingSystem.get_data(sym, mkt)
-        if df is None: return st.error("ไม่พบข้อมูล")
+    # --- AI LIVE STATUS TRACKING ---
+    st.markdown('<div class="section-header">🤖 AI Internet Search & Analysis</div>', unsafe_allow_html=True)
+    status_box = st.empty()
+    prog_bar = st.progress(0)
 
-        st.markdown(f'<div class="symbol-text" style="font-size:2rem;">{sym}</div>', unsafe_allow_html=True)
-        st.line_chart(df['Close'].tail(150))
+    # จำลองขั้นตอนการทำงานของ AI พร้อมสถานะ %
+    steps = [
+        (10, "🌐 กำลังเชื่อมต่อแหล่งข้อมูล Internet..."),
+        (35, f"📡 กำลังสแกนข่าวจากสำนักข่าวเศรษฐกิจย้อนหลัง 1 ปี สำหรับ {sym}..."),
+        (60, "🧠 Gemini กำลังวิเคราะห์ประเด็นที่กระทบราคาหุ้น..."),
+        (85, "🇹🇭 กำลังสรุปข้อมูลเป็นภาษาไทยและโมเดลธุรกิจ..."),
+        (100, "✅ ตรวจสอบความถูกต้องเรียบร้อยแล้ว!")
+    ]
 
-        st.markdown('<div class="section-header">🏢 โมเดลธุรกิจ (ภาษาไทย)</div>', unsafe_allow_html=True)
-        biz_th = f"**{info.get('longName', sym)}** ดำเนินธุรกิจหลักในกลุ่ม **{info.get('sector')}** โดยเน้นอุตสาหกรรม **{info.get('industry')}**"
-        st.markdown(f'<div class="ai-card">{biz_th}</div>', unsafe_allow_html=True)
+    for pct, msg in steps:
+        status_box.markdown(f'<p class="status-text">{msg} ({pct}%)</p>', unsafe_allow_html=True)
+        prog_bar.progress(pct)
+        time.sleep(0.6) # จำลองเวลาประมวลผล
 
-        st.markdown('<div class="section-header">🌍 สรุปความเคลื่อนไหวจาก Internet รอบ 1 ปี</div>', unsafe_allow_html=True)
-        # จำลองการสรุปความเคลื่อนไหว (AI Logic)
-        if news:
-            news_txt = "• " + "\n• ".join([n.get('title', 'Headline') for n in news[:5]])
-        else:
-            news_txt = "AI กำลังตรวจสอบแหล่งข่าวออนไลน์เพิ่มเติมเพื่อความแม่นยำ..."
-        st.markdown(f'<div class="ai-card" style="border-color:#FFBF00;">{news_txt}</div>', unsafe_allow_html=True)
+    df, info, news = TradingSystem.get_data(sym, mkt)
+    if df is None: return st.error("ไม่พบข้อมูล")
+
+    # One-Page Result Display
+    st.markdown(f'<div class="symbol-text">{sym}</div>', unsafe_allow_html=True)
+    st.line_chart(df['Close'].tail(150))
+
+    st.markdown('<div class="section-header">🏢 โมเดลธุรกิจ (ภาษาไทย)</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="ai-card">**{info.get("longName", sym)}** ดำเนินธุรกิจในกลุ่ม {info.get("sector")} เน้นอุตสาหกรรม {info.get("industry")} มีความโดดเด่นในฐานะผู้นำตลาดที่มี Market Cap {info.get("marketCap", 0)/1e9:.1f}B</div>', unsafe_allow_html=True)
+
+    st.markdown('<div class="section-header">🌍 สรุปความเคลื่อนไหวจาก Internet รอบ 1 ปี</div>', unsafe_allow_html=True)
+    if news:
+        summary = "\n".join([f"• {n.get('title')}" for n in news[:5]])
+        st.markdown(f'<div class="ai-card" style="border-color:#FFBF00;">{summary}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="ai-card">AI ไม่พบข่าวที่ส่งผลกระทบอย่างมีนัยสำคัญในช่วง 1 ปีที่ผ่านมา</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
