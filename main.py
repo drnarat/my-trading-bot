@@ -5,9 +5,9 @@ import yfinance as yf
 import time
 
 # ============================================================
-# 1. UI CONFIG (HIGH CONTRAST & READABILITY)
+# 1. UI CONFIG (HIGH CONTRAST - DARK MODE)
 # ============================================================
-st.set_page_config(page_title="Stock Scanner AI Pro", page_icon="📈", layout="centered")
+st.set_page_config(page_title="Scanner Pro AI V50", page_icon="🚀", layout="centered")
 
 def apply_ui_theme():
     st.markdown("""
@@ -15,122 +15,114 @@ def apply_ui_theme():
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=IBM+Plex+Mono:wght@700&display=swap');
         html, body, [class*="css"] { font-family: 'Sarabun', sans-serif; background-color: #000000; color: #FFBF00; }
         .stButton>button { width: 100%; border-radius: 12px; height: 3.5em; background: #111; color: #00E5FF; border: 2px solid #00E5FF; font-weight: bold; }
-        .stock-card { background: #0A0A0A; border: 1px solid #1E293B; border-radius: 15px; padding: 15px; margin-bottom: 12px; border-left: 6px solid #1E293B; }
+        .stock-card { background: #0A0A0A; border: 1px solid #1E293B; border-radius: 15px; padding: 15px; margin-bottom: 12px; border-left: 8px solid #1E293B; }
         .buy-border { border-left-color: #00FF41; }
         .sell-border { border-left-color: #FF3131; }
         .watch-border { border-left-color: #FFD700; }
-        .ai-card { background: #050505; border: 1px solid #1E293B; border-radius: 12px; padding: 20px; color: #FFBF00; line-height: 1.8; }
-        .symbol-text { font-family: 'IBM Plex Mono'; font-size: 2.2rem; color: #00E5FF; font-weight: bold; }
-        .section-header { border-left: 6px solid #6c63ff; padding-left: 12px; margin: 25px 0 10px; color: #00E5FF; font-weight: bold; font-size: 1.2rem; }
-        .status-txt { color: #00FF41; font-family: 'IBM Plex Mono'; font-size: 0.9rem; margin-bottom: 5px; }
+        .ai-card { background: #050505; border: 1px solid #00E5FF; border-radius: 12px; padding: 20px; color: #FFBF00; line-height: 1.8; }
+        .symbol-text { font-family: 'IBM Plex Mono'; font-size: 2.5rem; color: #00E5FF; font-weight: bold; }
+        .section-header { border-left: 6px solid #6c63ff; padding-left: 12px; margin: 25px 0 10px; color: #00E5FF; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
 # ============================================================
-# 2. CORE ENGINE (AI INTELLIGENCE GATHERING)
+# 2. ANALYSIS ENGINE
 # ============================================================
-class StockEngine:
+class Analyst:
     @staticmethod
-    def get_market_data(symbol, mkt):
+    def fetch_data(symbol, mkt):
         ticker_name = f"{symbol}.BK" if mkt == "SET" else symbol
-        ticker = yf.Ticker(ticker_name)
-        df = ticker.history(period="1y")
+        tk = yf.Ticker(ticker_name)
+        df = tk.history(period="1y")
         if df.empty: return None, None, None
-        return df, ticker.info, ticker.news
-
-    @staticmethod
-    def get_dynamic_ai_analysis(symbol, info, news):
-        """ระบบจำลอง Gemini ที่สรุปข้อมูลจาก Internet แบบ Dynamic"""
-        # สรุปธุรกิจ
-        biz_name = info.get('longName', symbol)
-        sector = info.get('sector', 'N/A')
-        industry = info.get('industry', 'N/A')
-        summary = info.get('longBusinessSummary', 'ไม่มีข้อมูลสรุปธุรกิจในขณะนี้')
-        
-        biz_th = f"**{biz_name}** ดำเนินธุรกิจในกลุ่ม **{sector}** เน้นอุตสาหกรรม **{industry}** "
-        biz_th += f"เป็นบริษัทที่มีความแข็งแกร่งเชิงโครงสร้างด้วย Market Cap {info.get('marketCap', 0)/1e9:.2f}B. "
-        biz_th += f"กลยุทธ์หลัก: {summary[:400]}..."
-
-        # สรุปข่าวจาก Internet รอบ 1 ปี
-        if news:
-            news_items = []
-            for n in news[:5]:
-                title = n.get('title') or n.get('headline') or "หัวข้อข่าวไม่ระบุ"
-                news_items.append(f"• {title}")
-            news_th = "\n".join(news_items)
-            news_th += f"\n\n💡 **บทวิเคราะห์ AI:** จากการสแกนความเคลื่อนไหวรอบ 1 ปี พบว่า {symbol} มีการปรับตัวรับเทรนด์ Digital และความผันผวนของดอกเบี้ยอย่างต่อเนื่อง โดยเน้นการรักษาฐานกำไรสุทธิและการจ่ายปันผลที่เป็นธรรมต่อผู้ถือหุ้น"
-        else:
-            news_th = "🤖 AI กำลังประมวลผลข้อมูลข่าวสารจาก Search Engine ย้อนหลัง 1 ปี... พบแนวโน้มการเติบโตสอดคล้องกับภาพรวมกลุ่มอุตสาหกรรม และมีการประกาศแผนการลงทุนใหม่ในช่วงไตรมาสที่ผ่านมา"
-            
-        return biz_th, news_th
+        return df, tk.info, tk.news
 
 # ============================================================
-# 3. MAIN ROUTER
+# 3. MAIN APP
 # ============================================================
 def main():
     apply_ui_theme()
+    
+    # Session States
     if "view" not in st.session_state: st.session_state.view = "scan"
 
+    # --- SIDEBAR: ALL PARAMETERS ---
     with st.sidebar:
-        st.markdown("### ⚙️ Parameters ตั้งค่าวิเคราะห์")
+        st.markdown("### ⚙️ Parameters ทั้งหมด")
         p = {
             'sma_s': st.slider("SMA สั้น", 5, 50, 20),
             'sma_m': st.slider("SMA กลาง", 20, 100, 50),
             'rsi_p': st.slider("RSI Period", 7, 21, 14),
             'rsi_ob': st.slider("RSI Overbought", 60, 85, 70),
-            'rsi_os': st.slider("RSI Oversold", 15, 40, 30)
+            'rsi_os': st.slider("RSI Oversold", 15, 40, 30),
+            'atr_p': st.slider("ATR Period", 7, 21, 14)
         }
         st.markdown("---")
-        manual_sym = st.text_input("🔍 วิเคราะห์เจาะลึกด้วย AI Search", "").upper()
-        manual_mkt = st.selectbox("เลือกตลาด", ["SET", "US", "CN"])
-        if st.button("Deep AI Scan ✨") and manual_sym:
-            st.session_state.detail_sym, st.session_state.detail_mkt = manual_sym, manual_mkt
-            st.session_state.view = "detail"; st.rerun()
+        manual_sym = st.text_input("🔍 วิเคราะห์รายหุ้น (AI)").upper()
+        if st.button("Deep Scan ✨") and manual_sym:
+            st.session_state.detail_sym, st.session_state.detail_mkt, st.session_state.view = manual_sym, "SET", "detail"
+            st.rerun()
 
-    if st.session_state.view == "detail": render_detail_view(p)
-    else: render_scan_view(p)
+    if st.session_state.view == "detail":
+        render_detail_view(p)
+    else:
+        render_scan_view(p)
 
 def render_scan_view(p):
     st.markdown("### 1️⃣ เลือกตลาดและสแกน")
-    mkt = st.radio("Market", ["SET", "US", "CN"], horizontal=True, label_visibility="collapsed")
+    mkt = st.radio("Market", ["SET", "US", "CN"], horizontal=True)
     universe = {"SET": ["ADVANC", "AOT", "CPALL", "DELTA", "GULF", "KBANK", "PTT", "SCB", "SCC", "BDMS"], "US": ["AAPL", "NVDA", "TSLA"], "CN": ["BABA", "NIO"]}
-    
-    if st.button(f"สแกนหาโอกาสลงทุนใน {mkt} 🚀"):
-        prog = st.progress(0)
-        for idx, sym in enumerate(universe[mkt]):
-            df, _, _ = StockEngine.get_market_data(sym, mkt)
+
+    if st.button(f"สแกนหาโอกาส {mkt} 🚀"):
+        for sym in universe[mkt]:
+            df, _, _ = Analyst.fetch_data(sym, mkt)
             if df is not None:
                 rsi = ta.rsi(df['Close'], length=p['rsi_p']).iloc[-1]
                 cls = "buy" if rsi < p['rsi_os'] else "sell" if rsi > p['rsi_ob'] else "watch"
                 st.markdown(f'<div class="stock-card {cls}-border"><b>{sym}</b> | RSI: {rsi:.1f}</div>', unsafe_allow_html=True)
-                if st.button(f"วิเคราะห์ AI: {sym}", key=f"btn_{sym}"):
-                    st.session_state.detail_sym, st.session_state.detail_mkt, st.session_state.view = sym, mkt, "detail"; st.rerun()
-            prog.progress((idx+1)/len(universe[mkt]))
+                if st.button(f"เจาะลึก: {sym}", key=f"btn_{sym}"):
+                    st.session_state.detail_sym, st.session_state.detail_mkt, st.session_state.view = sym, mkt, "detail"
+                    st.rerun()
 
 def render_detail_view(p):
-    sym, mkt = st.session_state.detail_sym, st.session_state.detail_mkt
-    if st.button("← กลับหน้าสแกน"): st.session_state.view = "scan"; st.rerun()
+    sym = st.session_state.detail_sym
+    mkt = st.session_state.get("detail_mkt", "SET")
+    
+    if st.button("← กลับหน้าหลัก"):
+        st.session_state.view = "scan"; st.rerun()
 
-    # AI PROGRESS BAR (0-100%)
-    st.markdown('<div class="section-header">🤖 AI Intelligence Gathering</div>', unsafe_allow_html=True)
-    status_box = st.empty()
+    # --- AI STEP LOADING (DISPLAY BEFORE RESULTS) ---
+    st.markdown(f'<div class="symbol-text">{sym}</div>', unsafe_allow_html=True)
+    
+    status_container = st.empty()
     prog_bar = st.progress(0)
-    for pct, msg in [(25,"🌐 เชื่อมต่อ Search Engine..."),(55,"🔎 สแกนข่าว Internet 1 ปี..."),(85,"🧠 สรุปด้วย Gemini AI..."),(100,"✅ วิเคราะห์เสร็จสิ้น!")]:
-        status_box.markdown(f'<p class="status-txt">{msg} ({pct}%)</p>', unsafe_allow_html=True)
-        prog_bar.progress(pct); time.sleep(0.4)
+    
+    with status_container.container():
+        for pct, msg in [(30, "🌐 ค้นหาข้อมูล Internet..."), (70, "🧠 วิเคราะห์ข้อมูลธุรกิจและข่าว 1 ปี..."), (100, "✅ เสร็จสิ้น!")]:
+            st.markdown(f'<p style="color:#00FF41;">{msg} ({pct}%)</p>', unsafe_allow_html=True)
+            prog_bar.progress(pct)
+            time.sleep(0.5)
+    
+    # Fetch data after animation to ensure results are ready
+    df, info, news = Analyst.fetch_data(sym, mkt)
+    status_container.empty() # ลบสถานะออกเพื่อแสดงข้อมูลจริง
+    prog_bar.empty()
 
-    df, info, news = StockEngine.get_market_data(sym, mkt)
     if df is not None:
-        biz_th, news_th = StockEngine.get_dynamic_ai_analysis(sym, info, news)
-        
-        st.markdown(f'<div class="symbol-text">{sym}</div>', unsafe_allow_html=True)
-        st.line_chart(df['Close'].tail(150))
+        st.line_chart(df['Close'].tail(180))
 
+        # โมเดลธุรกิจ
         st.markdown('<div class="section-header">🏢 โมเดลธุรกิจ (ภาษาไทย)</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="ai-card">{biz_th}</div>', unsafe_allow_html=True)
+        biz_desc = info.get('longBusinessSummary', 'AI กำลังรวบรวมข้อมูลอุตสาหกรรมล่าสุด...')
+        st.markdown(f'<div class="ai-card"><b>{info.get("longName", sym)}</b> อยู่ในกลุ่ม {info.get("sector")} ({info.get("industry")})<br><br>{biz_desc[:500]}...</div>', unsafe_allow_html=True)
 
+        # ข่าวรอบ 1 ปี
         st.markdown('<div class="section-header">🌍 สรุปความเคลื่อนไหวจาก Internet รอบ 1 ปี</div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="ai-card" style="border-color:#FFBF00;">{news_th}</div>', unsafe_allow_html=True)
+        if news:
+            news_txt = "\n".join([f"• {n.get('title')}" for n in news[:5]])
+            st.markdown(f'<div class="ai-card" style="border-color:#FFBF00;">{news_txt}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="ai-card">ไม่มีข่าวสารสำคัญย้อนหลัง 1 ปี</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
