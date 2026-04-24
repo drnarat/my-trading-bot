@@ -1,5 +1,5 @@
 import streamlit as st
-import pandas-t as pd
+import pandas-ta as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime
