@@ -2,125 +2,107 @@ import streamlit as st
 import pandas as pd
 import pandas_ta as ta
 import yfinance as yf
-from datetime import datetime
 
 # ============================================================
-# 1. STYLE & CSS (GLASSMORPHISM DESIGN)
+# 1. HIGH CONTRAST UI DESIGN (No Pure White)
 # ============================================================
-def apply_custom_css():
+def apply_high_contrast_ui():
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=IBM+Plex+Mono&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=IBM+Plex+Mono:wght@700&display=swap');
         
-        /* Global Background */
+        /* พื้นหลังสีน้ำเงินเข้มจัด (Midnight) */
         html, body, [class*="css"] {
             font-family: 'Sarabun', sans-serif;
-            background-color: #0d0d14;
-            color: #e2e8f0;
+            background-color: #050510;
+            color: #FFBF00; /* ตัวอักษรสีเหลืองอำพัน (Amber) - เห็นชัดที่สุดบนสีมืด */
         }
 
-        /* Modern Card Layout */
+        /* หัวข้อสีฟ้าสว่าง (Cyan) */
+        h1, h2, h3, b, strong {
+            color: #00E5FF !important; 
+        }
+
+        /* Card ดีไซน์ใหม่ เน้นขอบชัดเจน */
         .stock-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 15px;
-            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
-            backdrop-filter: blur(5px);
+            background: #101223;
+            border: 2px solid #1E293B;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 12px;
         }
         
-        .buy-border { border-left: 6px solid #00b894; }
-        .sell-border { border-left: 6px solid #d63031; }
-        .watch-border { border-left: 6px solid #fdcb6e; }
+        /* แถบสีข้าง Card เน้นความหนาและสีสด */
+        .buy-border { border-left: 8px solid #00FF41; }   /* เขียวนีออน */
+        .sell-border { border-left: 8px solid #FF3131; }  /* แดงสด */
+        .watch-border { border-left: 8px solid #FFD700; } /* ทอง */
 
-        /* Typography */
-        .symbol-text { font-family: 'IBM Plex Mono', monospace; font-size: 1.3rem; font-weight: 700; color: #fff; }
-        .price-text { font-family: 'IBM Plex Mono', monospace; font-size: 1.2rem; font-weight: 700; }
-        .signal-badge { padding: 4px 12px; border-radius: 10px; font-size: 0.8rem; font-weight: 700; }
+        /* ตัวเลขหุ้นแบบ Mono หนาพิเศษ */
+        .symbol-text { 
+            font-family: 'IBM Plex Mono', monospace; 
+            font-size: 1.4rem; 
+            color: #00E5FF;
+        }
+        .price-text { 
+            font-family: 'IBM Plex Mono', monospace; 
+            font-size: 1.2rem; 
+            color: #FFBF00;
+        }
         
-        /* Dashboard Stats */
-        .stat-box {
-            text-align: center;
-            background: rgba(108, 99, 255, 0.1);
-            padding: 15px;
-            border-radius: 15px;
-            border: 1px solid rgba(108, 99, 255, 0.2);
+        /* ปรับสีปุ่มให้ตัดกับพื้นหลัง */
+        .stButton>button {
+            background-color: #1E293B;
+            color: #00E5FF;
+            border: 2px solid #00E5FF;
+            font-weight: bold;
+        }
+
+        /* ปรับสี Expander */
+        .stExpander {
+            background-color: #0A0A1A;
+            border: 1px solid #1E293B !important;
         }
     </style>
     """, unsafe_allow_html=True)
 
 # ============================================================
-# 2. CORE LOGIC (DATA & ANALYSIS)
+# 2. ANALYSIS ENGINE (Clean & Robust)
 # ============================================================
-class StockAnalyzer:
-    @staticmethod
-    def fetch_data(symbol, market):
-        """ดึงข้อมูลจาก Yahoo Finance (เป็นหลัก)"""
-        ticker = f"{symbol}.BK" if market == "SET" else symbol
+def get_stock_analysis(symbol, market):
+    ticker = f"{symbol}.BK" if market == "SET" else symbol
+    try:
         df = yf.download(ticker, period="150d", interval="1d", progress=False)
-        
-        if df.empty: return None
-        
-        # แก้ไขปัญหา Multi-index ของ yfinance
+        if df.empty or len(df) < 50: return None
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
-        return df
-
-    @staticmethod
-    def calculate_indicators(df):
-        """คำนวณ Indicators ทั้งหมดในที่เดียว"""
+        
         df.ta.rsi(length=14, append=True)
-        df.ta.macd(append=True)
         df.ta.sma(length=20, append=True)
         df.ta.sma(length=50, append=True)
-        df.ta.atr(length=14, append=True)
         
-        # Bollinger Bands แบบปลอดภัย
-        bb = ta.bbands(df['Close'], length=20, std=2)
-        df['BBP'] = (df['Close'] - bb.iloc[:, 0]) / (bb.iloc[:, 2] - bb.iloc[:, 0] + 1e-9)
-        return df
-
-    @staticmethod
-    def generate_signal(df):
-        """วิเคราะห์สัญญาณซื้อขายจากคะแนน 0-100"""
         c = df.iloc[-1]
         score = 50
-        reasons = []
-
-        # RSI Logic
-        if c['RSI_14'] < 35: score += 15; reasons.append("RSI Oversold (โซนซื้อ)")
-        elif c['RSI_14'] > 70: score -= 15; reasons.append("RSI Overbought (โซนขาย)")
-
-        # Trend Logic
-        if c['Close'] > c['SMA_20'] > c['SMA_50']: score += 20; reasons.append("Bullish Trend (ขาขึ้นแข็งแกร่ง)")
+        if c['RSI_14'] < 30: score += 20
+        elif c['RSI_14'] > 70: score -= 20
+        if c['Close'] > c['SMA_20'] > c['SMA_50']: score += 20
         
-        # Volume Spike
-        vol_avg = df['Volume'].tail(20).mean()
-        if c['Volume'] > vol_avg * 1.5: score += 10; reasons.append("Volume Spike (แรงซื้อเข้า)")
-
-        # Result Mapping
-        if score >= 65: return score, "🟢 BUY", "buy", reasons
-        if score <= 35: return score, "🔴 SELL", "sell", reasons
-        return score, "🟡 WATCH", "watch", reasons
+        rec = "🟢 BUY" if score >= 65 else "🔴 SELL" if score <= 35 else "🟡 WATCH"
+        cls = "buy" if score >= 65 else "sell" if score <= 35 else "watch"
+        return {"price": c['Close'], "chg": (c['Close']/df.iloc[-2]['Close']-1)*100, 
+                "rsi": c['RSI_14'], "score": score, "rec": rec, "cls": cls}
+    except:
+        return None
 
 # ============================================================
-# 3. UI RENDERING (MOBILE-FIRST)
+# 3. APP RENDER
 # ============================================================
 def main():
-    apply_custom_css()
+    apply_high_contrast_ui()
     
-    # Header Section
-    st.markdown("""
-        <div style="text-align: center; padding-bottom: 20px;">
-            <h1 style="margin-bottom: 0;">📈 Scanner Pro</h1>
-            <p style="color: #8892b0; font-size: 0.9rem;">Smart Trading Companion</p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Market Selection Tab
-    market_choice = st.selectbox("เลือกตลาดหุ้น", ["SET (Thai)", "US Tech (USA)", "CN Tech (China)"])
-    market_key = market_choice.split(" ")[0]
+    st.markdown('<h1 style="text-align: center;">📊 SCANNER PRO</h1>', unsafe_allow_html=True)
+    
+    m_choice = st.selectbox("MARKET", ["SET (Thai)", "US Tech (USA)", "CN Tech (China)"])
+    m_key = m_choice.split(" ")[0]
 
     universe = {
         "SET": ["ADVANC", "CPALL", "PTT", "KBANK", "AOT", "DELTA", "GULF", "SCB"],
@@ -128,50 +110,27 @@ def main():
         "CN": ["BABA", "JD", "PDD", "NIO", "XPEV", "LI", "BILI"]
     }
 
-    if st.button("🔍 Start Scanning", use_container_width=True):
-        results = []
-        analyzer = StockAnalyzer()
-        
-        progress_bar = st.progress(0)
-        stocks = universe[market_key]
-        
-        for idx, sym in enumerate(stocks):
-            df = analyzer.fetch_data(sym, market_key)
-            if df is not None:
-                df = analyzer.calculate_indicators(df)
-                score, rec, cls, reasons = analyzer.generate_signal(df)
-                
-                c = df.iloc[-1]
-                chg = (c['Close'] / df.iloc[-2]['Close'] - 1) * 100
-                
-                # Render Card for each stock
+    if st.button("RUN SCANNER", use_container_width=True):
+        for sym in universe[m_key]:
+            res = get_stock_analysis(sym, m_key)
+            if res:
                 st.markdown(f"""
-                <div class="stock-card {cls}-border">
-                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div class="stock-card {res['cls']}-border">
+                    <div style="display: flex; justify-content: space-between;">
                         <div>
                             <div class="symbol-text">{sym}</div>
-                            <div style="color: #8892b0; font-size: 0.8rem;">Score: <b>{score}</b></div>
+                            <div style="color: #64748B; font-size: 0.8rem;">SCORE: {res['score']}</div>
                         </div>
                         <div style="text-align: right;">
-                            <div class="price-text">{c['Close']:,.2f}</div>
-                            <div style="color: {'#00b894' if chg >= 0 else '#d63031'}; font-weight: bold;">{chg:+.2f}%</div>
+                            <div class="price-text">{res['price']:,.2f}</div>
+                            <div style="color: {'#00FF41' if res['chg'] >= 0 else '#FF3131'}; font-weight: bold;">
+                                {res['chg']:+.2f}%
+                            </div>
                         </div>
                     </div>
-                    <div style="margin-top: 15px; display: flex; justify-content: space-between; align-items: center;">
-                        <span class="signal-badge" style="background: rgba(108,99,255,0.15); color: #6c63ff;">{rec}</span>
-                        <div style="font-size: 0.75rem; color: #8892b0;">RSI: {c['RSI_14']:.1f}</div>
-                    </div>
+                    <div style="margin-top: 10px; font-weight: bold; color: #00E5FF;">{res['rec']}</div>
                 </div>
                 """, unsafe_allow_html=True)
-                
-                with st.expander(f"📖 ดูเหตุผลวิเคราะห์สำหรับ {sym}"):
-                    for r in reasons:
-                        st.write(f"• {r}")
-                    st.line_chart(df['Close'].tail(30))
-            
-            progress_bar.progress((idx + 1) / len(stocks))
-        
-        st.success(f"สแกนสำเร็จ {len(stocks)} รายการ")
 
 if __name__ == "__main__":
     main()
